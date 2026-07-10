@@ -10,7 +10,9 @@ import streamlit as st
 
 from groq import Groq
 
-from backend.utils.ocr_engine import extract_text_dual, extract_text_safe
+import platform
+import pytesseract
+from backend.utils.ocr_engine import extract_text_safe
 
 client = None
 
@@ -32,7 +34,7 @@ else:
 def extract_text(image):
     try:
         img_array = np.array(image)
-        result = extract_text_dual(img_array)
+        result = extract_text_safe(image)
         ocr_text = result["text"]
         corrected_text = correct_ocr_text(ocr_text)
         return corrected_text
