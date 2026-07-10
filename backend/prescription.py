@@ -3,7 +3,11 @@ from groq import Groq
 from PIL import Image
 import base64
 import io
+from dotenv import load_dotenv
 import os
+
+# Load environment variables
+load_dotenv()
 
 # Groq API Configuration
 api_key = os.getenv("GROQ_API_KEY")
