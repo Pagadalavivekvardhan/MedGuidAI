@@ -2,23 +2,15 @@ import os
 import json
 import re
 import base64
-import io
-from io import BytesIO
 
-import cv2
-import numpy as np
 import pandas as pd
 from PIL import Image
 
 import streamlit as st
-import pytesseract
 
-import platform
 from groq import Groq
 
-
 from backend.utils.ocr_engine import extract_text_dual, extract_text_safe
-
 
 client = None
 

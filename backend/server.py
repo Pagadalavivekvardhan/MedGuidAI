@@ -3,9 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from PIL import Image
 import io
-import pytesseract
-import cv2
-import numpy as np
 import json
 import base64
 from pydantic import BaseModel
@@ -14,9 +11,7 @@ import platform
 from dotenv import load_dotenv
 import os
 
-
 from backend.utils.ocr_engine import extract_text_safe
-
 
 app = FastAPI(title="MedGuid AI Backend")
 
@@ -62,12 +57,6 @@ class DietRequest(BaseModel):
     meals: Optional[int] = None
     allergies: Optional[str] = None
 
-def extract_text_from_image(image):
-    try:
-        return extract_text_safe(image)
-    except Exception:
-        return ""
-
 @app.post("/api/upload-prescription")
 async def upload_prescription(file: UploadFile = File(...)):
     try:
@@ -105,7 +94,7 @@ async def analyze_lab_report(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
-        text = extract_text_from_image(image)
+        text = extract_text_safe(image)
         prompt = f"""You are a medical AI assistant. Analyze this lab report.
 1. Extract test values and return JSON
 2. Give a simple human language summary.

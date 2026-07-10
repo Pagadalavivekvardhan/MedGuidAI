@@ -20,6 +20,9 @@ def __getattr__(name):
     elif name == "correct_medical_terms":
         from .text_correction import correct_medical_terms
         return correct_medical_terms
+    elif name == "extract_text_safe":
+        from .ocr_engine import extract_text_safe
+        return extract_text_safe
     elif name == "correct_drug_name":
         from .text_correction import correct_drug_name
         return correct_drug_name
