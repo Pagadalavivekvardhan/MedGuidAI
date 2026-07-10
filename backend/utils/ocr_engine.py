@@ -30,11 +30,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Configure Tesseract path
-if platform.system() == "Windows":
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-else:
-    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+# Configure Tesseract path (only if pytesseract is available)
+if pytesseract is not None:
+    if platform.system() == "Windows":
+        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    else:
+        pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # Lazy-load PaddleOCR to avoid slow import at startup
 _paddle_ocr = None
@@ -193,5 +194,8 @@ def extract_text_safe(image_input):
     except Exception as e:
         # Fallback to Tesseract with full preprocessing
         logger.warning("Dual OCR failed, falling back to Tesseract: %s", e)
+        if pytesseract is None:
+            logger.error("Tesseract not available for fallback")
+            return ""
         preprocessed = preprocess_for_ocr(image_input)
         return pytesseract.image_to_string(preprocessed, config="--oem 3 --psm 6").strip()

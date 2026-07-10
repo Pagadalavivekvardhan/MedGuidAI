@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import base64
 
 import pandas as pd
 from PIL import Image
@@ -10,9 +9,10 @@ import streamlit as st
 
 from groq import Groq
 
-import platform
 import pytesseract
 from backend.utils.ocr_engine import extract_text_safe
+from backend.utils.image_preprocessing import preprocess_image
+from backend.utils.text_correction import correct_ocr_text
 
 client = None
 
@@ -26,14 +26,8 @@ def initialize_groq():
         client = Groq(api_key=api_key)
     return True
 
-if platform.system() == "Windows":
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR	esseract.exe"
-else:
-    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
-
 def extract_text(image):
     try:
-        img_array = np.array(image)
         result = extract_text_safe(image)
         ocr_text = result["text"]
         corrected_text = correct_ocr_text(ocr_text)
@@ -51,24 +45,6 @@ def clean_value(value):
     if value is None:
         return ""
     return str(value).strip()
-
-def safe_float(value):
-    try:
-        value = str(value)
-        value = value.replace(",", "")
-        value = value.replace("<", "")
-        value = value.replace(">", "")
-        return float(value)
-    except:
-        return None
-
-def status_color(status):
-    status = status.lower()
-    if status == "high":
-        return "High"
-    if status == "low":
-        return "Low"
-    return "Normal"
 
 def show_patient(patient):
     st.subheader("Patient Details")
@@ -89,34 +65,51 @@ def show_tests(tests):
             "Value": clean_value(test.get("value")),
             "Unit": clean_value(test.get("unit")),
             "Reference": clean_value(test.get("reference_range")),
-            "Status": status_color(clean_value(test.get("status", "Normal")))
+            "Status": clean_value(test.get("status", "Normal")).capitalize()
         })
     df = pd.DataFrame(rows)
     st.dataframe(df, hide_index=True)
 
 def build_prompt(ocr_text):
-    return f"""
-You are an expert Pathologist and Medical Laboratory AI.
-Analyze the OCR text from a laboratory report.
-OCR TEXT
-========
+    return f"""You are an expert pathologist and medical laboratory AI assistant.
+
+Analyze the following OCR-extracted text from a medical laboratory report.
+Your task is to extract ALL test results accurately and provide a medical interpretation.
+
+OCR EXTRACTED TEXT:
+==================
 {ocr_text}
-Return ONLY valid JSON.
-Do NOT use markdown.
-Do NOT use backticks.
-Use this schema exactly:
+==================
+
+Return ONLY a valid JSON object with this EXACT structure:
 {{
-  "patient": {{"name": "", "age": "", "gender": ""}},
-  "tests": [{{"name": "", "value": "", "unit": "", "reference_range": "", "status": "Normal"}}],
-  "summary": "",
-  "recommendations": [""]
+  "patient": {{"name": "string or N/A", "age": "string or N/A", "gender": "string or N/A"}},
+  "tests": [
+    {{
+      "name": "Test name",
+      "value": "Numerical value",
+      "unit": "Unit (e.g., mg/dL, g/dL, %)",
+      "reference_range": "Normal range (e.g., 70-100)",
+      "status": "Normal" | "High" | "Low"
+    }}
+  ],
+  "summary": "Brief medical summary of findings in simple language",
+  "recommendations": ["Recommendation 1", "Recommendation 2"]
 }}
-Rules:
-1. Extract every laboratory test.
-2. Status must be Low, Normal, or High.
-3. If no tests detected return empty tests array.
-Return ONLY JSON.
-"""
+
+CRITICAL RULES:
+1. Extract EVERY single test result visible in the text
+2. Compare each value against its reference range to determine status
+3. Status must be exactly one of: "Normal", "High", or "Low"
+4. If a test value is above the upper limit of reference range, status = "High"
+5. If a test value is below the lower limit of reference range, status = "Low"
+6. If within range or no reference range, status = "Normal"
+7. The summary should explain findings in simple, non-medical language
+8. Recommendations should be practical health advice
+9. Return ONLY the JSON object - no markdown, no backticks, no extra text
+10. If no tests are found, return empty tests array with an appropriate message in summary
+
+Return ONLY the JSON object."""
 
 def analyze_lab_report(ocr_text):
     prompt = build_prompt(ocr_text)
@@ -126,26 +119,44 @@ def analyze_lab_report(ocr_text):
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096
+            max_tokens=4096,
+            temperature=0.1
         )
         result = response.choices[0].message.content.strip()
-        result = result.replace("```json", "").replace("```", "").strip()
+        
+        # Clean up markdown formatting
+        if "```json" in result:
+            result = result.split("```json")[1]
+        if "```" in result:
+            result = result.split("```")[0]
+        
+        # Extract JSON object
         start = result.find("{")
-        end = result.rfind("}")
-        if start == -1 or end == -1:
+        end = result.rfind("}") + 1
+        if start == -1 or end <= start:
             raise ValueError("No JSON object found in Groq response.")
-        data = json.loads(result[start:end + 1])
+        
+        data = json.loads(result[start:end])
+        
+        # Ensure all required fields exist with defaults
         data.setdefault("patient", {})
         data.setdefault("tests", [])
         data.setdefault("summary", "")
         data.setdefault("recommendations", [])
+        
+        # Validate and normalize test statuses
+        for test in data.get("tests", []):
+            status = test.get("status", "Normal")
+            if status not in ["Normal", "High", "Low"]:
+                test["status"] = "Normal"
+        
         return data
     except json.JSONDecodeError:
-        st.error("Groq returned invalid JSON.")
-        return {"patient": {}, "tests": [], "summary": "Unable to parse AI response.", "recommendations": []}
+        st.error("Groq returned invalid JSON. Please try again.")
+        return {"patient": {}, "tests": [], "summary": "Unable to parse AI response. Please try uploading the image again.", "recommendations": []}
     except Exception as e:
-        st.error(f"Groq Error: {e}")
-        return {"patient": {}, "tests": [], "summary": "Analysis failed.", "recommendations": []}
+        st.error(f"Analysis error: {e}")
+        return {"patient": {}, "tests": [], "summary": "Analysis failed. Please ensure the image contains readable text.", "recommendations": []}
 
 def process_lab_report(image):
     ocr_text = extract_text(image)
@@ -182,7 +193,7 @@ def lab_report_tab():
     if uploaded_file is None:
         return
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Report")
+    st.image(image, caption="Uploaded Report", use_container_width=True)
     if not st.button("Analyze Report", type="primary"):
         return
     with st.spinner("Reading laboratory report..."):
@@ -210,8 +221,4 @@ def lab_report_tab():
     with st.expander("View Raw JSON"):
         st.json(analysis)
 
-def run():
-    lab_report_tab()
 
-if __name__ == "__main__":
-    lab_report_tab()

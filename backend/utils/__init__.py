@@ -14,6 +14,9 @@ def __getattr__(name):
     elif name == "preprocess_for_ocr":
         from .image_preprocessing import preprocess_for_ocr
         return preprocess_for_ocr
+    elif name == "enhance_for_vision_model":
+        from .image_preprocessing import enhance_for_vision_model
+        return enhance_for_vision_model
     elif name == "correct_ocr_text":
         from .text_correction import correct_ocr_text
         return correct_ocr_text

@@ -90,6 +90,34 @@ def preprocess_for_ocr(image_input):
     return Image.fromarray(preprocessed)
 
 
+def enhance_for_vision_model(image: Image.Image) -> Image.Image:
+    """
+    Minimal contrast enhancement for vision models.
+    Vision models like LLaMA-4 work best with original color images,
+    so this only applies CLAHE contrast enhancement without binarization.
+
+    Args:
+        image: PIL Image (color or grayscale)
+
+    Returns:
+        Enhanced PIL Image
+    """
+    img_array = np.array(image)
+
+    if len(img_array.shape) == 3:
+        lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+        l_channel = lab[:, :, 0]
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        lab[:, :, 0] = clahe.apply(l_channel)
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+    else:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(img_array)
+
+    logger.debug("Enhanced image for vision model")
+    return Image.fromarray(enhanced)
+
+
 def _deskew(binary_image):
     """
     Detects document skew angle using Hough Lines and applies

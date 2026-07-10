@@ -10,7 +10,7 @@ before being sent to the LLM for analysis.
 
 import logging
 import re
-from typing import Optional, List, Dict
+from typing import Optional
 
 try:
     from rapidfuzz import process, fuzz
@@ -103,7 +103,7 @@ def correct_ocr_text(text: str) -> str:
     corrected = _correct_common_errors(text)
     
     # Correct medical terms
-    corrected = _correct_medical_terms(corrected)
+    corrected = correct_medical_terms(corrected)
     
     return corrected.strip()
 
