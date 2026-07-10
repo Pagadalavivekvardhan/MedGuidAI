@@ -22,7 +22,10 @@ def health():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict to actual Streamlit Cloud URL in production
+    allow_origins=[
+    "http://localhost:8501",
+    "https://medguid.streamlit.app"
+],  # TODO: Restrict to actual Streamlit Cloud URL in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
