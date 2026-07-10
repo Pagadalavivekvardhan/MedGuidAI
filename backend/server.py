@@ -10,27 +10,41 @@ import json
 from pydantic import BaseModel
 from typing import Optional, List
 
-app = FastAPI()
+app = FastAPI(title="MedGuid AI Backend")
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "MedGuid AI Backend is running"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501/"],
+    allow_origins=["*"],  # TODO: Restrict to actual Streamlit Cloud URL in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+import platform
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    raise RuntimeError("GEMINI_API_KEY environment variable is not set. Please set it in your .env file or Render dashboard.")
 
 genai.configure(api_key=API_KEY)
 # Using the same key from existing code, though a centralized location or env var is better.
 # Make sure tesseract path is set correctly as in existing code
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+else:
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 class ChatRequest(BaseModel):
     user_input: str

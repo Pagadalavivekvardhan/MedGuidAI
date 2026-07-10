@@ -3,7 +3,11 @@ import google.generativeai as genai
 from PIL import Image
 
 # configure once
-genai.configure(api_key="google_api_key")  # Replace with your actual API key
+import os
+api_key = os.getenv("GEMINI_API_KEY", "")
+if not api_key:
+    raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
+genai.configure(api_key=api_key)
 
 def prescription_tab():
 

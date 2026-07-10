@@ -1,7 +1,11 @@
 import streamlit as st
 import google.generativeai as genai
 
-genai.configure(api_key="google_api_key")  # Replace with your actual API key
+import os
+api_key = os.getenv("GEMINI_API_KEY", "")
+if not api_key:
+    raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
+genai.configure(api_key=api_key)
 
 def diet_tab():
 

@@ -12,6 +12,7 @@ from PIL import Image
 import streamlit as st
 import pytesseract
 
+import platform
 import google.generativeai as genai
 
 
@@ -31,7 +32,10 @@ def initialize_gemini():
     global model
 
     if model is None:
-        api_key = "google_api_key"  # Replace with your actual API key
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        if not api_key:
+            st.error("GEMINI_API_KEY environment variable is not set. Please configure it in Streamlit secrets or .env file.")
+            return False
 
         if not api_key:
             api_key = os.getenv("GEMINI_API_KEY")
@@ -50,9 +54,12 @@ def initialize_gemini():
 ########################################################
 
 # Windows Path
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
+else:
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 
 ########################################################
