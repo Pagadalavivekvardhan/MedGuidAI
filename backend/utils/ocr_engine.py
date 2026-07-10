@@ -180,3 +180,29 @@ def _make_result(text, engine, tess_raw, paddle_raw, similarity):
         "paddle_raw": paddle_raw,
         "similarity": similarity,
     }
+
+
+def extract_text_safe(image_input):
+    """
+    Safe text extraction with automatic fallback.
+    Tries dual-engine first, falls back to Tesseract only.
+    """
+    try:
+        return extract_text(image_input)
+    except Exception:
+        # Fallback to Tesseract only
+        import pytesseract
+        import cv2
+        import numpy as np
+        from PIL import Image
+        
+        if isinstance(image_input, Image.Image):
+            img_array = np.array(image_input.convert("RGB"))
+        elif isinstance(image_input, np.ndarray):
+            img_array = image_input
+        else:
+            img_array = np.array(Image.open(image_input).convert("RGB"))
+        
+        gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        return pytesseract.image_to_string(thresh, config="--oem 3 --psm 6").strip()

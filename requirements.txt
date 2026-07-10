@@ -9,8 +9,6 @@ numpy>=1.24.0
 pandas>=2.0.0,<3.0.0
 opencv-python-headless>=4.8.0
 pytesseract>=0.3.10
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
 rapidfuzz>=3.0.0
 plotly>=5.15.0
 
@@ -21,3 +19,6 @@ groq>=0.4.0
 requests>=2.31.0
 
 SpeechRecognition>=3.10.0
+
+# Optional: Dual-engine OCR (adds ~2GB)
+# pip install paddleocr paddlepaddle>=2.5.0

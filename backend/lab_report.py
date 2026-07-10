@@ -16,9 +16,9 @@ import pytesseract
 import platform
 from groq import Groq
 
-from backend.utils.image_preprocessing import preprocess_image, preprocess_for_ocr
-from backend.utils.ocr_engine import extract_text_dual
-from backend.utils.text_correction import correct_ocr_text
+
+from backend.utils.ocr_engine import extract_text_dual, extract_text_safe
+
 
 client = None
 

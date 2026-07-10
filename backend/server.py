@@ -14,9 +14,9 @@ import platform
 from dotenv import load_dotenv
 import os
 
-from backend.utils.image_preprocessing import preprocess_image
-from backend.utils.ocr_engine import extract_text_dual
-from backend.utils.text_correction import correct_ocr_text
+
+from backend.utils.ocr_engine import extract_text_safe
+
 
 app = FastAPI(title="MedGuid AI Backend")
 
@@ -64,14 +64,9 @@ class DietRequest(BaseModel):
 
 def extract_text_from_image(image):
     try:
-        img_array = np.array(image)
-        result = extract_text_dual(img_array)
-        return correct_ocr_text(result["text"])
+        return extract_text_safe(image)
     except Exception:
-        img_array = np.array(image.convert("RGB"))
-        gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
-        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        return pytesseract.image_to_string(thresh).strip()
+        return ""
 
 @app.post("/api/upload-prescription")
 async def upload_prescription(file: UploadFile = File(...)):
