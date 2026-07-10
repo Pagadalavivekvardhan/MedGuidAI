@@ -1,12 +1,15 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import speech_recognition as sr
 
 import os
-api_key = os.getenv("GEMINI_API_KEY", "")
+
+# Groq API Configuration
+api_key = os.getenv("GROQ_API_KEY", "")
 if not api_key:
-    raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
-genai.configure(api_key=api_key)
+    raise RuntimeError("GROQ_API_KEY environment variable is not set.")
+
+client = Groq(api_key=api_key)
 
 def chat_tab():
 
@@ -58,8 +61,6 @@ def chat_tab():
 
             with st.spinner("Thinking..."):
 
-                model = genai.GenerativeModel("gemini-2.5-flash")
-
                 report = st.session_state["report_text"]
 
                 prompt = f"""
@@ -85,8 +86,14 @@ Example style:
 Keep it short and human-like.
 """
 
-                response = model.generate_content(prompt)
-                reply = response.text
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=1024
+                )
+                reply = response.choices[0].message.content
 
                 st.write(reply)
 

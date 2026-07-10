@@ -2,6 +2,8 @@
 import os
 import json
 import re
+import base64
+import io
 from io import BytesIO
 
 import cv2
@@ -13,38 +15,25 @@ import streamlit as st
 import pytesseract
 
 import platform
-import google.generativeai as genai
+from groq import Groq
 
 
 ########################################################
-# Gemini Configuration
+# Groq Configuration
 ########################################################
 
-# Recommended:
-# Store your API key in .streamlit/secrets.toml
-#
-# GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+client = None
 
-# Temporary (Environment Variable)
-model = None
+def initialize_groq():
+    global client
 
-def initialize_gemini():
-    global model
-
-    if model is None:
-        api_key = os.getenv("GEMINI_API_KEY", "")
+    if client is None:
+        api_key = os.getenv("GROQ_API_KEY", "")
         if not api_key:
-            st.error("GEMINI_API_KEY environment variable is not set. Please configure it in Streamlit secrets or .env file.")
+            st.error("GROQ_API_KEY environment variable is not set. Please configure it in your .env file.")
             return False
 
-        if not api_key:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                st.error("Gemini API Key not found.")
-                return False
-
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        client = Groq(api_key=api_key)
 
     return True
 
@@ -234,7 +223,7 @@ def show_tests(tests):
     )
     
 ########################################################
-# Gemini Prompt
+# Groq Prompt
 ########################################################
 
 def build_prompt(ocr_text: str) -> str:
@@ -299,30 +288,36 @@ Return ONLY JSON.
 
 
 ########################################################
-# Gemini Analysis
+# Groq Analysis
 ########################################################
 
 def analyze_lab_report(ocr_text):
 
     prompt = build_prompt(ocr_text)
     
-    if not initialize_gemini():
+    if not initialize_groq():
         
      return {
         "patient": {},
         "tests": [],
-        "summary": "Gemini initialization failed.",
+        "summary": "Groq initialization failed.",
         "recommendations": []
     }
 
     try:
 
-        response = model.generate_content(prompt)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=4096
+        )
 
-        if not hasattr(response, "text") or not response.text:
-            raise ValueError("Gemini returned an empty response.")
-
-        result = response.text.strip()
+        result = response.choices[0].message.content.strip()
 
         # Remove markdown fences if present
         result = result.replace("```json", "")
@@ -333,7 +328,7 @@ def analyze_lab_report(ocr_text):
         end = result.rfind("}")
 
         if start == -1 or end == -1:
-            raise ValueError("No JSON object found in Gemini response.")
+            raise ValueError("No JSON object found in Groq response.")
 
         json_text = result[start:end + 1]
 
@@ -349,7 +344,7 @@ def analyze_lab_report(ocr_text):
 
     except json.JSONDecodeError:
 
-        st.error("Gemini returned invalid JSON.")
+        st.error("Groq returned invalid JSON.")
 
         return {
             "patient": {},
@@ -360,7 +355,7 @@ def analyze_lab_report(ocr_text):
 
     except Exception as e:
 
-        st.error(f"Gemini Error: {e}")
+        st.error(f"Groq Error: {e}")
 
         return {
             "patient": {},

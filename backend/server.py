@@ -1,14 +1,18 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
+from groq import Groq
 from PIL import Image
 import io
 import pytesseract
 import cv2
 import numpy as np
 import json
+import base64
 from pydantic import BaseModel
 from typing import Optional, List
+import platform
+from dotenv import load_dotenv
+import os
 
 app = FastAPI(title="MedGuid AI Backend")
 
@@ -25,25 +29,21 @@ app.add_middleware(
     allow_origins=[
     "http://localhost:8501",
     "https://medguid.streamlit.app"
-],  # TODO: Restrict to actual Streamlit Cloud URL in production
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-import platform
-from dotenv import load_dotenv
-import os
-
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = os.getenv("GROQ_API_KEY")
 if not API_KEY:
-    raise RuntimeError("GEMINI_API_KEY environment variable is not set. Please set it in your .env file or Render dashboard.")
+    raise RuntimeError("GROQ_API_KEY environment variable is not set. Please set it in your .env file or Render dashboard.")
 
-genai.configure(api_key=API_KEY)
-# Using the same key from existing code, though a centralized location or env var is better.
-# Make sure tesseract path is set correctly as in existing code
+client = Groq(api_key=API_KEY)
+
+# Tesseract path configuration
 if platform.system() == "Windows":
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 else:
@@ -68,7 +68,11 @@ async def upload_prescription(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        
+        # Convert image to base64 for Groq API
+        img_buffer = io.BytesIO()
+        image.save(img_buffer, format="PNG")
+        img_base64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
         
         prompt = """
 You are a medical assistant.
@@ -88,9 +92,24 @@ Example:
 ]
 No markdown, just pure JSON array.
 """
-        response = model.generate_content([prompt, image])
+        
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
+                    ]
+                }
+            ],
+            max_tokens=4096
+        )
+        
+        raw_text = response.choices[0].message.content.strip()
+        
         # Clean response text if it contains markdown code blocks
-        raw_text = response.text.strip()
         if raw_text.startswith("```json"):
             raw_text = raw_text.split("```json")[1]
         if raw_text.startswith("```"):
@@ -114,7 +133,6 @@ async def analyze_lab_report(file: UploadFile = File(...)):
         
         text = pytesseract.image_to_string(thresh)
 
-        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""
 You are a medical AI assistant. Analyze this lab report.
 1. Extract test values and return JSON
@@ -131,8 +149,14 @@ Return ONLY a valid JSON object in this exact format:
 Lab Report text:
 {text}
 """
-        response = model.generate_content(prompt)
-        raw_text = response.text.strip()
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048
+        )
+        
+        raw_text = response.choices[0].message.content.strip()
         if raw_text.startswith("```json"):
             raw_text = raw_text.split("```json")[1]
         if raw_text.startswith("```"):
@@ -148,7 +172,6 @@ Lab Report text:
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""
 You are a friendly health assistant.
 
@@ -166,16 +189,20 @@ Instructions:
 - Avoid medical jargon
 - If needed, explain in simple words
 """
-        response = model.generate_content(prompt)
-        return {"reply": response.text.strip()}
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512
+        )
+        
+        return {"reply": response.choices[0].message.content.strip()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/diet-recommendation")
 async def diet_recommendation(request: DietRequest):
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        
         if request.mode == "Quick Suggestions":
             prompt = f"""
 You are a nutrition expert. Based on this lab report, suggest a diet.
@@ -201,8 +228,14 @@ Return ONLY a valid JSON object with detailed text plan and a macro breakdown pe
   "plan": "Complete text description going here..."
 }}
 """
-        response = model.generate_content(prompt)
-        raw_text = response.text.strip()
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048
+        )
+        
+        raw_text = response.choices[0].message.content.strip()
         if raw_text.startswith("```json"):
             raw_text = raw_text.split("```json")[1]
         if raw_text.startswith("```"):

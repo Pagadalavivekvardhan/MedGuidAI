@@ -1,11 +1,14 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 
 import os
-api_key = os.getenv("GEMINI_API_KEY", "")
+
+# Groq API Configuration
+api_key = os.getenv("GROQ_API_KEY", "")
 if not api_key:
-    raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
-genai.configure(api_key=api_key)
+    raise RuntimeError("GROQ_API_KEY environment variable is not set.")
+
+client = Groq(api_key=api_key)
 
 def diet_tab():
 
@@ -25,8 +28,6 @@ def diet_tab():
     )
 
     text = st.session_state["lab_analysis"]
-    model = genai.GenerativeModel("gemini-2.5-flash")
-
     # ================= QUICK MODE =================
     if mode == "Quick Suggestions":
 
@@ -52,7 +53,12 @@ Lab Report:
 {text}
 """
 
-                result = model.generate_content(prompt).text
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2048
+                )
+                result = response.choices[0].message.content
 
                 st.subheader("🥗 Diet Suggestions")
                 st.markdown(result)
@@ -105,7 +111,12 @@ PLAN:
 Your detailed meal plan schedule and recommendations.
 """
 
-                result = model.generate_content(prompt).text
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2048
+                )
+                result = response.choices[0].message.content
                 st.session_state["personalized_diet_result"] = result
 
         if "personalized_diet_result" in st.session_state:
