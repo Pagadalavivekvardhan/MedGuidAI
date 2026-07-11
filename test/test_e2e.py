@@ -273,7 +273,8 @@ class TestAPIEndpointPipeline:
             if "backend.server" in sys.modules:
                 del sys.modules["backend.server"]
             from backend.server import app
-
+            from backend.security import limiter
+            limiter.enabled = False
             client = TestClient(app)
 
             # Mock the Groq client's chat.completions.create
@@ -312,7 +313,8 @@ class TestAPIEndpointPipeline:
             if "backend.server" in sys.modules:
                 del sys.modules["backend.server"]
             from backend.server import app
-
+            from backend.security import limiter
+            limiter.enabled = False
             client = TestClient(app)
 
             # Mock both the OCR and Groq client
@@ -352,7 +354,8 @@ class TestAPIEndpointPipeline:
             if "backend.server" in sys.modules:
                 del sys.modules["backend.server"]
             from backend.server import app
-
+            from backend.security import limiter
+            limiter.enabled = False
             client = TestClient(app)
 
             with patch("backend.server.client") as mock_client:
@@ -386,7 +389,8 @@ class TestAPIEndpointPipeline:
             if "backend.server" in sys.modules:
                 del sys.modules["backend.server"]
             from backend.server import app
-
+            from backend.security import limiter
+            limiter.enabled = False
             client = TestClient(app)
 
             with patch("backend.server.client") as mock_client:
