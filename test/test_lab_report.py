@@ -5,23 +5,24 @@ import pytest
 
 pytest.importorskip("streamlit")
 import backend.lab_report as lr
+from backend.utils.prompts import LAB_REPORT_ANALYSIS_PROMPT
 
 
 class TestBuildPrompt:
-    """Tests for build_prompt function."""
+    """Tests for the shared lab report analysis prompt."""
 
     def test_prompt_contains_ocr_text(self, sample_ocr_text):
-        prompt = lr.build_prompt(sample_ocr_text)
+        prompt = LAB_REPORT_ANALYSIS_PROMPT.format(ocr_text=sample_ocr_text)
         assert "John Doe" in prompt
 
     def test_prompt_requests_json(self, sample_ocr_text):
-        prompt = lr.build_prompt(sample_ocr_text)
+        prompt = LAB_REPORT_ANALYSIS_PROMPT.format(ocr_text=sample_ocr_text)
         assert "JSON" in prompt
         assert "tests" in prompt
         assert "status" in prompt
 
     def test_prompt_includes_rules(self, sample_ocr_text):
-        prompt = lr.build_prompt(sample_ocr_text)
+        prompt = LAB_REPORT_ANALYSIS_PROMPT.format(ocr_text=sample_ocr_text)
         assert "Normal" in prompt
         assert "High" in prompt
         assert "Low" in prompt

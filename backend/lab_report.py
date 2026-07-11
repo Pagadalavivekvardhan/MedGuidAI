@@ -32,6 +32,7 @@ from backend.utils.ocr_engine import extract_text_safe
 from backend.utils.image_preprocessing import preprocess_image
 from backend.utils.text_correction import correct_ocr_text
 from backend.utils.rxnorm import validate_test_name
+from backend.utils.prompts import LAB_REPORT_ANALYSIS_PROMPT
 
 # Configurable reports directory
 REPORTS_DIR = os.getenv("REPORTS_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "saved_reports"))
@@ -106,50 +107,8 @@ def show_tests(tests):
     st.dataframe(df, hide_index=True)
 
 
-def build_prompt(ocr_text):
-    return f"""You are an expert pathologist and medical laboratory AI assistant.
-
-Analyze the following OCR-extracted text from a medical laboratory report.
-Your task is to extract ALL test results accurately and provide a medical interpretation.
-
-OCR EXTRACTED TEXT:
-==================
-{ocr_text}
-==================
-
-Return ONLY a valid JSON object with this EXACT structure:
-{{
-  "patient": {{"name": "string or N/A", "age": "string or N/A", "gender": "string or N/A"}},
-  "tests": [
-    {{
-      "name": "Test name",
-      "value": "Numerical value",
-      "unit": "Unit (e.g., mg/dL, g/dL, %)",
-      "reference_range": "Normal range (e.g., 70-100)",
-      "status": "Normal" | "High" | "Low"
-    }}
-  ],
-  "summary": "Brief medical summary of findings in simple language",
-  "recommendations": ["Recommendation 1", "Recommendation 2"]
-}}
-
-CRITICAL RULES:
-1. Extract EVERY single test result visible in the text
-2. Compare each value against its reference range to determine status
-3. Status must be exactly one of: "Normal", "High", or "Low"
-4. If a test value is above the upper limit of reference range, status = "High"
-5. If a test value is below the lower limit of reference range, status = "Low"
-6. If within range or no reference range, status = "Normal"
-7. The summary should explain findings in simple, non-medical language
-8. Recommendations should be practical health advice
-9. Return ONLY the JSON object - no markdown, no backticks, no extra text
-10. If no tests are found, return empty tests array with an appropriate message in summary
-
-Return ONLY the JSON object."""
-
-
 def analyze_lab_report(ocr_text):
-    prompt = build_prompt(ocr_text)
+    prompt = LAB_REPORT_ANALYSIS_PROMPT.format(ocr_text=ocr_text)
     if not initialize_groq():
         return {"patient": {}, "tests": [], "summary": "Groq initialization failed.", "recommendations": []}
     try:
