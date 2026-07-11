@@ -285,6 +285,8 @@ def _save_report_to_disk(analysis, ocr_text, filename_prefix="lab_report"):
 
         return filepath
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         st.warning(f"Could not save report to disk: {e}")
         return None
 
@@ -313,7 +315,9 @@ def _load_saved_reports():
                 "tests_count": len(data.get("analysis", {}).get("tests", [])),
                 "summary": data.get("analysis", {}).get("summary", "No summary"),
             })
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             continue
     return reports
 
@@ -393,7 +397,7 @@ def lab_report_tab():
     if uploaded_file is None:
         return
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Report", use_container_width=True)
+    st.image(image, caption="Uploaded Report", use_column_width=True)
     if not st.button("Analyze Report", type="primary"):
         return
     with st.spinner("Reading laboratory report..."):

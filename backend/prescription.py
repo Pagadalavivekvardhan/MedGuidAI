@@ -91,7 +91,7 @@ Return ONLY the JSON array."""
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
                 {
-                    "role": "user",
+                    "role": "user", 
                     "content": [
                         {"type": "text", "text": prompt},
                         {
@@ -190,7 +190,7 @@ def prescription_tab():
 
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Prescription", use_container_width=True)
+        st.image(image, caption="Uploaded Prescription", use_column_width=True)
 
         if st.button("🔍 Extract Medicine Info", type="primary"):
             with st.spinner("Analyzing prescription with AI..."):
