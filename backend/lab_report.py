@@ -255,6 +255,35 @@ def show_summary(summary, recommendations):
         st.write("No recommendations available.")
 
 
+def _save_report_to_disk(analysis, ocr_text, filename_prefix="lab_report"):
+    """Save lab report analysis to disk for persistence.
+    
+    Returns the saved file path, or None if saving failed.
+    """
+    try:
+        from datetime import datetime
+        reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "saved_reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{filename_prefix}_{timestamp}.json"
+        filepath = os.path.join(reports_dir, filename)
+        
+        save_data = {
+            "timestamp": datetime.now().isoformat(),
+            "ocr_text": ocr_text,
+            "analysis": analysis,
+        }
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(save_data, f, indent=4, ensure_ascii=False)
+        
+        return filepath
+    except Exception as e:
+        st.warning(f"Could not save report to disk: {e}")
+        return None
+
+
 def lab_report_tab():
     st.header("AI Lab Report Analyzer")
     st.write("Upload a laboratory report image for AI-powered analysis.")
@@ -272,6 +301,12 @@ def lab_report_tab():
     analysis = result["analysis"]
     ocr_text = result["ocr_text"]
     st.success("Analysis Completed Successfully")
+    
+    # Save report to disk automatically
+    saved_path = _save_report_to_disk(analysis, ocr_text)
+    if saved_path:
+        st.info(f"Report saved to: {os.path.basename(saved_path)}")
+    
     with st.expander("View OCR Text"):
         st.text_area("Extracted Text", value=ocr_text, height=250)
     patient = analysis.get("patient", {})

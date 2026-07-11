@@ -21,6 +21,9 @@ Thumbs.db
 # Uploads (optional if generated)
 uploads/
 
+# Saved reports
+saved_reports/
+
 # Streamlit
 .streamlit/nul
 nul
