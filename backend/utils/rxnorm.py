@@ -277,7 +277,7 @@ def validate_test_name(raw_name: str) -> str:
         "PSA", "AFP", "CEA", "CA-125",
     ]
 
-    if not raw_name or len(raw_name) < 2:
+    if not raw_name or len(raw_name) < 4:
         return raw_name
 
     match = process.extractOne(
