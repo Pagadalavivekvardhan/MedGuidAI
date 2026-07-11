@@ -18,9 +18,11 @@ class TestEnhanceForVisionModel:
         result = enhance_for_vision_model(white_image)
         assert isinstance(result, Image.Image)
 
-    def test_preserves_image_size(self, white_image):
+    def test_preserves_or_upscales_image_size(self, white_image):
         result = enhance_for_vision_model(white_image)
-        assert result.size == white_image.size
+        # Small images may be upscaled; result should be >= input size
+        assert result.size[0] >= white_image.size[0]
+        assert result.size[1] >= white_image.size[1]
 
     def test_handles_grayscale_image(self, grayscale_image):
         result = enhance_for_vision_model(grayscale_image)

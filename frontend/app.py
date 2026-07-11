@@ -9,7 +9,7 @@ from frontend.api_client import (
     get_api_key,
 )
 from backend.prescription import prescription_tab
-from backend.lab_report import lab_report_tab, _load_saved_reports
+from backend.lab_report import lab_report_tab, get_saved_reports_count
 from backend.diet_recommendation import diet_tab
 from backend.chat_assistant import chat_tab
 
@@ -87,15 +87,12 @@ with st.sidebar:
         else:
             st.error("Cannot reach backend")
 
-    # Show saved reports count
-    try:
-        saved_count = len(_load_saved_reports())
-        if saved_count > 0:
-            st.success(f"📄 {saved_count} saved report(s)")
-        else:
-            st.info("No saved reports yet")
-    except Exception:
-        pass
+    # Show saved reports count (lightweight - no JSON parsing)
+    saved_count = get_saved_reports_count()
+    if saved_count > 0:
+        st.success(f"📄 {saved_count} saved report(s)")
+    else:
+        st.info("No saved reports yet")
 
     # Show current config
     st.divider()

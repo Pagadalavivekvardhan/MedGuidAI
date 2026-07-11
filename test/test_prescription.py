@@ -1,6 +1,7 @@
 """Unit tests for backend.prescription module."""
 
 import json
+from PIL import Image
 
 from backend.utils.image_preprocessing import enhance_for_vision_model
 
@@ -10,11 +11,13 @@ class TestPreprocessPrescriptionImage:
 
     def test_returns_pil_image(self, white_image):
         result = enhance_for_vision_model(white_image)
-        assert result.size == white_image.size
+        assert isinstance(result, Image.Image)
 
-    def test_preserves_dimensions(self, white_image):
+    def test_preserves_or_upscales_dimensions(self, white_image):
         result = enhance_for_vision_model(white_image)
-        assert result.size == white_image.size
+        # Small images may be upscaled for better vision model accuracy
+        assert result.size[0] >= white_image.size[0]
+        assert result.size[1] >= white_image.size[1]
 
 
 class TestJsonParsing:

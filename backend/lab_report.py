@@ -31,6 +31,7 @@ except ImportError:
 from backend.utils.ocr_engine import extract_text_safe
 from backend.utils.image_preprocessing import preprocess_image
 from backend.utils.text_correction import correct_ocr_text
+from backend.utils.rxnorm import validate_test_name
 
 # Configurable reports directory
 REPORTS_DIR = os.getenv("REPORTS_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "saved_reports"))
@@ -182,6 +183,10 @@ def analyze_lab_report(ocr_text):
             status = test.get("status", "Normal")
             if status not in ["Normal", "High", "Low"]:
                 test["status"] = "Normal"
+            # Correct test name using fuzzy matching
+            raw_name = test.get("name", "")
+            if raw_name:
+                test["name"] = validate_test_name(raw_name)
 
         return data
     except json.JSONDecodeError:
@@ -291,7 +296,23 @@ def _save_report_to_disk(analysis, ocr_text, filename_prefix="lab_report"):
         return None
 
 
-def _load_saved_reports():
+def get_saved_reports_count():
+    """Get the count of saved reports without parsing JSON files.
+
+    This is a lightweight function suitable for sidebar display on every page load.
+    Returns the number of JSON files in REPORTS_DIR.
+    """
+    if not os.path.exists(REPORTS_DIR):
+        return 0
+    try:
+        return len([f for f in os.listdir(REPORTS_DIR) if f.endswith(".json")])
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
+def load_saved_reports():
     """Load all saved reports from disk, sorted by timestamp (newest first).
 
     Returns a list of dicts with filename, timestamp, and summary info.
@@ -324,7 +345,7 @@ def _load_saved_reports():
 
 def _display_saved_reports():
     """Display the Previous Reports section."""
-    reports = _load_saved_reports()
+    reports = load_saved_reports()
     if not reports:
         st.info("No previous reports saved yet.")
         return

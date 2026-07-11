@@ -25,6 +25,8 @@ class Medicine(BaseModel):
     duration: str = Field(..., description="How long to take (e.g., 5 days)")
     use: str = Field(..., description="What it's for")
     instructions: str = Field(..., description="Special instructions")
+    confidence: str = Field("unknown", description="Transcription confidence: high, medium, low, or unknown")
+    raw_text: str = Field("", description="All other text visible near this medicine")
 
 
 class PrescriptionResponse(BaseModel):
@@ -205,34 +207,65 @@ async def upload_prescription(request: Request, file: UploadFile = File(..., des
         processed_image.save(img_buffer, format="PNG")
         img_base64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
 
-        prompt = """You are an expert medical assistant specializing in prescription analysis.
+        prompt = """You are a PRESCRIPTION TRANSCRIPTION ASSISTANT.
 
-Analyze this prescription image carefully and extract ALL medicine information.
+Your ONLY job is to READ every piece of text visible on this prescription image and TRANSCRIBE it EXACTLY as written.
 
-For EACH medicine found, return a JSON object with these fields:
-- "name": The medicine name (exact spelling)
-- "dosage": The dosage (e.g., "500mg", "10mg", "5ml")
-- "frequency": How often to take (e.g., "Twice daily", "Once daily", "Three times daily", "As needed")
-- "duration": How long to take (e.g., "5 days", "1 week", "2 weeks", "Continue")
-- "use": What it's for (simple explanation)
-- "instructions": Any special instructions (e.g., "Take after food", "Take before bedtime")
+ABSOLUTE RULES - VIOLATION IS UNACCEPTABLE:
 
-IMPORTANT RULES:
-1. Convert doctor shorthand: "1-0-1" = Twice daily, "1-1-1" = Three times daily, "sos" = As needed
-2. Extract EVERY medicine visible in the image
-3. Be precise with dosage numbers
-4. Preserve the exact spelling as written on the prescription
-5. Return ONLY a valid JSON array, no other text
+1. NEVER GUESS. NEVER INVENT. NEVER SUBSTITUTE. NEVER CORRECT.
+   - If you see "Esmayo", write "Esmayo" - NOT any known drug name.
+   - If you see "FlupijaM", write "FlupijaM" - NOT any known drug name.
+   - If you see "Elma", write "Elma" - NOT any known drug name.
 
-Example output format:
+2. TRANSCRIBE EVERY SINGLE WORD you can see on the prescription.
+   - Every line, every scribble, every number.
+   - If something looks like a duration (e.g., "5 days", "x7 days", "for 1 week", "10 days"), WRITE IT.
+   - If something looks like frequency (e.g., "1-0-1", "BD", "TID", "OD", "SOS", "1x daily"), WRITE IT.
+   - DO NOT skip any text just because you think it's unclear.
+
+3. If you CANNOT read something at all, use "[ILLEGIBLE]" - do NOT guess.
+   If you can read SOME letters, write those letters followed by "...": e.g., "Flu..."
+
+4. For each medicine, capture EVERYTHING written near it:
+   - Medicine name (exact spelling)
+   - All numbers/dosages visible (e.g., 500mg, 10ml, 1 tab)
+   - All frequency notations visible (1-0-1, BD, TID, OD, SOS, etc.)
+   - All duration notations visible (x5 days, 7 days, continue, etc.)
+   - All instructions visible (AC, PC, before food, after food, etc.)
+   - All purpose/diagnosis text visible
+
+5. Even if text is in a non-standard format, transcribe it as-is.
+   - Doctor wrote "x10" -> write "x10" for duration
+   - Doctor wrote "1M-1N" -> write "1M-1N" for frequency
+   - Doctor wrote "tab x7" -> write "tab" for dosage and "x7" for duration
+
+For EACH medicine, return a JSON object:
+- "name": EXACTLY what is written for the medicine name
+- "dosage": ALL dosage/quantity text visible (e.g., "500mg", "1 tab BD", "10ml")
+- "frequency": ALL frequency text visible (e.g., "1-0-1", "BD", "TID", "OD", "SOS", "as directed")
+- "duration": ALL duration text visible (e.g., "5 days", "x7", "continue", "10 days", "1 month")
+- "use": ALL purpose/diagnosis text visible (e.g., "for cough", "for infection", "fever")
+- "instructions": ALL instruction text visible (e.g., "after food", "before bed", "on empty stomach")
+- "raw_text": EVERYTHING else visible near this medicine that doesn't fit above
+- "confidence": "high" / "medium" / "low"
+
+Even if you are unsure about the CATEGORY, include the text in the most appropriate field.
+The goal is ZERO information loss - capture everything.
+
+Return ONLY a valid JSON array.
+
+Example:
 [
   {
     "name": "Paracetamol",
     "dosage": "500mg",
-    "frequency": "Three times daily",
-    "duration": "5 days",
-    "use": "Pain relief and fever reduction",
-    "instructions": "Take after food"
+    "frequency": "1-0-1",
+    "duration": "x5 days",
+    "use": "for fever",
+    "instructions": "after food",
+    "raw_text": "",
+    "confidence": "high"
   }
 ]
 

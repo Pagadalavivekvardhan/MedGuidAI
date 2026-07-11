@@ -92,9 +92,10 @@ def preprocess_for_ocr(image_input):
 
 def enhance_for_vision_model(image: Image.Image) -> Image.Image:
     """
-    Minimal contrast enhancement for vision models.
-    Vision models like LLaMA-4 work best with original color images,
-    so this only applies CLAHE contrast enhancement without binarization.
+    Enhanced preprocessing for vision models.
+    
+    Applies CLAHE contrast enhancement, sharpening, and upscaling
+    to help the vision model read handwritten/printed text more accurately.
 
     Args:
         image: PIL Image (color or grayscale)
@@ -107,14 +108,26 @@ def enhance_for_vision_model(image: Image.Image) -> Image.Image:
     if len(img_array.shape) == 3:
         lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
         l_channel = lab[:, :, 0]
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         lab[:, :, 0] = clahe.apply(l_channel)
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
     else:
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img_array)
 
-    logger.debug("Enhanced image for vision model")
+    # Upscale small images (helps vision models read text)
+    h, w = enhanced.shape[:2]
+    if max(h, w) < 1024:
+        scale = 1024 / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        enhanced = cv2.resize(enhanced, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+
+    # Sharpen to make text edges clearer
+    sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
+    enhanced = cv2.filter2D(enhanced, -1, sharpen_kernel)
+
+    logger.debug("Enhanced image for vision model (CLAHE + upscale + sharpen)")
     return Image.fromarray(enhanced)
 
 

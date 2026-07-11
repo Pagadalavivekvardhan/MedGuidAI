@@ -30,7 +30,9 @@ class TestPrescriptionPipeline:
         """Test complete pipeline: image → preprocess → Groq API → JSON → medicines list."""
         # Step 1: Preprocess image
         processed = enhance_for_vision_model(white_image)
-        assert processed.size == white_image.size
+        # Small images may be upscaled for better vision model accuracy
+        assert processed.size[0] >= white_image.size[0]
+        assert processed.size[1] >= white_image.size[1]
 
         # Step 2: Convert to base64 (simulating the API call)
         import base64
