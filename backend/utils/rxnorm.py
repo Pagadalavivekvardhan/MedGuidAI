@@ -81,6 +81,25 @@ COMMON_DRUGS: List[str] = [
 ]
 
 
+# ─── Common lab test reference list for fuzzy correction ─────────────────────
+COMMON_TESTS: List[str] = [
+    "Hemoglobin", "Hematocrit", "WBC", "White Blood Cell", "RBC",
+    "Red Blood Cell", "Platelet", "Platelet Count", "MPV",
+    "Mean Corpuscular Volume", "MCV", "MCH", "MCHC",
+    "Fasting Glucose", "Blood Glucose", "HbA1c", "HbA1C",
+    "Total Cholesterol", "HDL", "LDL", "Triglycerides",
+    "Creatinine", "Blood Urea Nitrogen", "BUN", "Uric Acid",
+    "SGOT", "SGPT", "ALT", "AST", "ALP", "Bilirubin",
+    "Total Protein", "Albumin", "Globulin",
+    "Sodium", "Potassium", "Chloride", "Calcium", "Magnesium",
+    "Phosphorus", "Iron", "Ferritin", "TIBC",
+    "TSH", "Free T3", "Free T4", "Thyroid Stimulating Hormone",
+    "Vitamin D", "Vitamin B12", "Folate",
+    "CRP", "ESR", "Rheumatoid Factor",
+    "PSA", "AFP", "CEA", "CA-125",
+]
+
+
 # ─── Public API ──────────────────────────────────────────────────────────────
 
 def validate_drug_name(raw_drug_name: str) -> Dict:
@@ -260,23 +279,6 @@ def validate_test_name(raw_name: str) -> str:
     Returns:
         Corrected test name, or original if no match found.
     """
-    COMMON_TESTS = [
-        "Hemoglobin", "Hematocrit", "WBC", "White Blood Cell", "RBC",
-        "Red Blood Cell", "Platelet", "Platelet Count", "MPV",
-        "Mean Corpuscular Volume", "MCV", "MCH", "MCHC",
-        "Fasting Glucose", "Blood Glucose", "HbA1c", "HbA1C",
-        "Total Cholesterol", "HDL", "LDL", "Triglycerides",
-        "Creatinine", "Blood Urea Nitrogen", "BUN", "Uric Acid",
-        "SGOT", "SGPT", "ALT", "AST", "ALP", "Bilirubin",
-        "Total Protein", "Albumin", "Globulin",
-        "Sodium", "Potassium", "Chloride", "Calcium", "Magnesium",
-        "Phosphorus", "Iron", "Ferritin", "TIBC",
-        "TSH", "Free T3", "Free T4", "Thyroid Stimulating Hormone",
-        "Vitamin D", "Vitamin B12", "Folate",
-        "CRP", "ESR", "Rheumatoid Factor",
-        "PSA", "AFP", "CEA", "CA-125",
-    ]
-
     if not raw_name or len(raw_name) < 4:
         return raw_name
 
