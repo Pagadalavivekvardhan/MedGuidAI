@@ -27,26 +27,19 @@ class TestGetApiKey:
     def test_valid_api_key_accepted(self):
         """A valid API key in the header should be accepted."""
         from backend.security import get_api_key
-
-        # get_api_key is async, need to run it properly
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
-            get_api_key(api_key="medguid-dev-key-2024")
-        )
+        result = asyncio.run(get_api_key(api_key="medguid-dev-key-2024"))
         assert result == "medguid-dev-key-2024"
 
     def test_missing_api_key_raises_403(self):
         """Missing API key (None) should raise HTTPException 403."""
         from backend.security import get_api_key
         from fastapi import HTTPException
-
         import asyncio
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.get_event_loop().run_until_complete(
-                get_api_key(api_key=None)
-            )
+            asyncio.run(get_api_key(api_key=None))
         assert exc_info.value.status_code == 403
         assert "Missing API key" in exc_info.value.detail
 
@@ -54,13 +47,10 @@ class TestGetApiKey:
         """An invalid API key should raise HTTPException 403."""
         from backend.security import get_api_key
         from fastapi import HTTPException
-
         import asyncio
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.get_event_loop().run_until_complete(
-                get_api_key(api_key="invalid-key-12345")
-            )
+            asyncio.run(get_api_key(api_key="invalid-key-12345"))
         assert exc_info.value.status_code == 403
         assert "Invalid API key" in exc_info.value.detail
 

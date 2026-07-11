@@ -49,6 +49,15 @@ class TestSessionHelpers:
             key = get_api_key()
             assert key == ""
 
+    def test_get_api_key_returns_none_when_key_not_present(self):
+        """Session state without 'api_key' key at all should return empty string (not None)."""
+        with patch("frontend.api_client.st") as mock_st:
+            mock_st.session_state = {"backend_url": "http://test:8000"}
+            from frontend.api_client import get_api_key
+            key = get_api_key()
+            assert key is not None
+            assert key == ""
+
     def test_get_api_key_returns_key(self):
         """Should return API key from session state."""
         with patch("frontend.api_client.st") as mock_st:
@@ -129,6 +138,26 @@ class TestCheckBackendHealth:
 
 class TestUploadPrescription:
     """Tests for upload_prescription function."""
+
+    def test_upload_empty_file_bytes(self):
+        """Should still attempt upload with empty file bytes (server handles validation)."""
+        with patch("frontend.api_client.st") as mock_st, \
+             patch("frontend.api_client.requests") as mock_requests:
+            mock_st.session_state = {"backend_url": "http://test:8000", "api_key": "key"}
+            mock_resp = MagicMock()
+            mock_resp.status_code = 500
+            mock_resp.json.return_value = {"detail": "Invalid image"}
+            mock_resp.text = "error"
+            mock_requests.post.return_value = mock_resp
+
+            from frontend.api_client import upload_prescription
+            with pytest.raises(Exception, match="Invalid image"):
+                upload_prescription(b"", "test.png")
+
+            # Verify the call was made with the empty bytes
+            call_kwargs = mock_requests.post.call_args
+            files = call_kwargs.kwargs.get("files") or call_kwargs[1].get("files")
+            assert files["file"][1] == b""
 
     def test_upload_success(self):
         """Should return medicines dict on successful upload."""
