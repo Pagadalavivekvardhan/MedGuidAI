@@ -368,9 +368,9 @@ def lab_report_tab():
             st.json(analysis)
         return
 
-    # Show Previous Reports section
-    with st.expander("Previous Reports", expanded=False):
-        _display_saved_reports()
+    # Show Previous Reports section (not inside an expander to avoid nesting)
+    st.subheader("Previous Reports")
+    _display_saved_reports()
 
     st.write("Upload a laboratory report image for AI-powered analysis.")
     uploaded_file = st.file_uploader("Upload Lab Report", type=["png", "jpg", "jpeg"])
