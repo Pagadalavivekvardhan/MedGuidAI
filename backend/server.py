@@ -9,13 +9,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Union
 from dotenv import load_dotenv
 import os
-import logging
 
 from backend.utils.ocr_engine import extract_text_safe
 from backend.utils.image_preprocessing import enhance_for_vision_model
 from backend.security import setup_security, get_api_key, limiter
-
-logger = logging.getLogger(__name__)
 
 
 # --- Response Schemas ---

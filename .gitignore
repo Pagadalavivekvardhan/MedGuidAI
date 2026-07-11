@@ -22,4 +22,5 @@ Thumbs.db
 uploads/
 
 # Streamlit
-.streamlit/
+.streamlit/nul
+nul
