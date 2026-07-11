@@ -14,6 +14,9 @@ from PIL import Image
 
 from backend.utils.image_preprocessing import enhance_for_vision_model
 
+# Default development API key
+DEFAULT_API_KEY = "medguid-dev-key-2024"
+
 
 # ─── Prescription E2E Tests ─────────────────────────────────────────────────
 
@@ -288,6 +291,7 @@ class TestAPIEndpointPipeline:
                 response = client.post(
                     "/api/upload-prescription",
                     files={"file": ("test.png", buf, "image/png")},
+                    headers={"X-API-KEY": DEFAULT_API_KEY},
                 )
 
                 assert response.status_code == 200
@@ -328,6 +332,7 @@ class TestAPIEndpointPipeline:
                 response = client.post(
                     "/api/analyze-lab-report",
                     files={"file": ("test.png", buf, "image/png")},
+                    headers={"X-API-KEY": DEFAULT_API_KEY},
                 )
 
                 assert response.status_code == 200
@@ -361,6 +366,7 @@ class TestAPIEndpointPipeline:
                         "report_text": "Hemoglobin: 12.5 (Low)",
                         "language": "English",
                     },
+                    headers={"X-API-KEY": DEFAULT_API_KEY},
                 )
 
                 assert response.status_code == 200
@@ -393,6 +399,7 @@ class TestAPIEndpointPipeline:
                         "report_text": "Cholesterol: 240 (High)",
                         "mode": "Quick Suggestions",
                     },
+                    headers={"X-API-KEY": DEFAULT_API_KEY},
                 )
 
                 assert response.status_code == 200

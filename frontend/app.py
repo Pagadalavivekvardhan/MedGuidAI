@@ -3,7 +3,12 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import streamlit as st
-from backend.prescription import prescription_tab   
+from frontend.api_client import (
+    check_backend_health,
+    get_backend_url,
+    get_api_key,
+)
+from backend.prescription import prescription_tab
 from backend.lab_report import lab_report_tab
 from backend.diet_recommendation import diet_tab
 from backend.chat_assistant import chat_tab
@@ -53,17 +58,52 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🩺 Medical AI Agent")
+# --- Sidebar: API Configuration ---
 
+with st.sidebar:
+    st.header("API Configuration")
+
+    # Backend URL
+    backend_url = st.text_input(
+        "Backend URL",
+        value=st.session_state.get("backend_url", "http://localhost:8000"),
+        help="URL of the MedGuid FastAPI backend"
+    )
+    st.session_state["backend_url"] = backend_url
+
+    # API Key
+    api_key = st.text_input(
+        "API Key",
+        value=st.session_state.get("api_key", ""),
+        type="password",
+        help="Your MedGuid API key (X-API-KEY header)"
+    )
+    st.session_state["api_key"] = api_key
+
+    # Connection status
+    if st.button("Check Connection"):
+        if check_backend_health():
+            st.success("Backend is running!")
+        else:
+            st.error("Cannot reach backend")
+
+    # Show current config
+    st.divider()
+    st.caption(f"Backend: `{get_backend_url()}`")
+    st.caption(f"API Key: `{'***' + api_key[-4:] if api_key and len(api_key) >= 4 else 'Not set'}`")
+
+# --- Main Content ---
+
+st.title("Medical AI Agent")
 tab1, tab2, tab3, tab4 = st.tabs([
-    "💊 Prescription Reader",   
-    "🧪 Lab Report Analyzer",
-    "🥗 Diet Recommendation",
-    "💬 Chat Assistant"
+    "Prescription Reader",   
+    "Lab Report Analyzer",
+    "Diet Recommendation",
+    "Chat Assistant"
 ])
 
 with tab1:
-    prescription_tab()   # ✅ CALL FUNCTION
+    prescription_tab()
 
 with tab2:
     lab_report_tab()

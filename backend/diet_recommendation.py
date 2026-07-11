@@ -1,14 +1,35 @@
 import streamlit as st
-from groq import Groq
-
+import json
 import os
 
-# Groq API Configuration
-api_key = os.getenv("GROQ_API_KEY", "")
-if not api_key:
-    raise RuntimeError("GROQ_API_KEY environment variable is not set.")
+# Try to import API client for backend mode
+try:
+    from frontend.api_client import (
+        get_diet_quick_suggestions as api_quick_suggestions,
+        get_diet_personalized_plan as api_personalized_plan,
+        get_api_key, check_backend_health,
+    )
+    HAS_API_CLIENT = True
+except ImportError:
+    HAS_API_CLIENT = False
 
-client = Groq(api_key=api_key)
+# Import direct Groq client as fallback
+client = None
+_Groq = None
+try:
+    from groq import Groq as _Groq
+except ImportError:
+    pass
+
+def _init_groq():
+    global client
+    if client is None and _Groq is not None:
+        api_key = os.getenv("GROQ_API_KEY", "")
+        if api_key:
+            try:
+                client = _Groq(api_key=api_key)
+            except Exception:
+                pass
 
 def diet_tab():
 
@@ -53,14 +74,23 @@ Lab Report:
 {text}
 """
 
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=2048
-                )
-                result = response.choices[0].message.content
+                use_api = HAS_API_CLIENT and get_api_key() and check_backend_health()
+                if use_api:
+                    suggestions = api_quick_suggestions(text)
+                    result = "\n".join(f"- {s}" for s in suggestions)
+                else:
+                    _init_groq()
+                    if client is None:
+                        st.error("No Groq client available. Configure backend or GROQ_API_KEY.")
+                        return
+                    response = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=2048
+                    )
+                    result = response.choices[0].message.content
 
-                st.subheader("🥗 Diet Suggestions")
+                st.subheader("Diet Suggestions")
                 st.markdown(result)
 
     # ================= PERSONALIZED MODE =================
@@ -111,12 +141,30 @@ PLAN:
 Your detailed meal plan schedule and recommendations.
 """
 
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=2048
-                )
-                result = response.choices[0].message.content
+                use_api = HAS_API_CLIENT and get_api_key() and check_backend_health()
+                if use_api:
+                    plan_data = api_personalized_plan(
+                        report_text=text,
+                        diet_type=diet_type,
+                        goal=goal,
+                        meals=meals,
+                        allergies=allergies or "",
+                    )
+                    # Format as JSON:PLAN: for consistent parsing below
+                    breakdown = plan_data.get("breakdown", [])
+                    plan_text = plan_data.get("plan", "")
+                    result = f"JSON:\n{json.dumps(breakdown, indent=2)}\n\nPLAN:\n{plan_text}"
+                else:
+                    _init_groq()
+                    if client is None:
+                        st.error("No Groq client available. Configure backend or GROQ_API_KEY.")
+                        return
+                    response = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=2048
+                    )
+                    result = response.choices[0].message.content
                 st.session_state["personalized_diet_result"] = result
 
         if "personalized_diet_result" in st.session_state:

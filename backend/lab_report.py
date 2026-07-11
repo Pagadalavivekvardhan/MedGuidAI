@@ -1,38 +1,65 @@
 import os
 import json
 import re
+import io
 
 import pandas as pd
 from PIL import Image
 
 import streamlit as st
 
-from groq import Groq
+# Try to import API client for backend mode
+try:
+    from frontend.api_client import analyze_lab_report as api_analyze_lab_report
+    from frontend.api_client import get_api_key, check_backend_health
+    HAS_API_CLIENT = True
+except ImportError:
+    HAS_API_CLIENT = False
 
-import pytesseract
+# Import direct Groq client as fallback
+client = None
+try:
+    from groq import Groq
+except ImportError:
+    pass
+
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
 from backend.utils.ocr_engine import extract_text_safe
 from backend.utils.image_preprocessing import preprocess_image
 from backend.utils.text_correction import correct_ocr_text
 
-client = None
 
 def initialize_groq():
     global client
     if client is None:
         api_key = os.getenv("GROQ_API_KEY", "")
         if not api_key:
-            st.error("GROQ_API_KEY environment variable is not set.")
             return False
-        client = Groq(api_key=api_key)
+        try:
+            client = Groq(api_key=api_key)
+        except Exception:
+            return False
     return True
 
+
 def extract_text(image):
+    """Extract text from image using OCR pipeline.
+
+    extract_text_safe returns a string directly (not a dict).
+    """
     try:
-        result = extract_text_safe(image)
-        ocr_text = result["text"]
+        ocr_text = extract_text_safe(image)
+        if not ocr_text or not ocr_text.strip():
+            raise ValueError("OCR returned empty text")
         corrected_text = correct_ocr_text(ocr_text)
         return corrected_text
     except Exception as e:
+        if pytesseract is None:
+            st.error("pytesseract not available for fallback OCR.")
+            return ""
         st.warning(f"Dual OCR failed, falling back to Tesseract: {e}")
         processed = preprocess_image(image)
         config = "--oem 3 --psm 6"
@@ -41,10 +68,12 @@ def extract_text(image):
         text = re.sub(r"\n+", "\n", text)
         return text.strip()
 
+
 def clean_value(value):
     if value is None:
         return ""
     return str(value).strip()
+
 
 def show_patient(patient):
     st.subheader("Patient Details")
@@ -52,6 +81,7 @@ def show_patient(patient):
     c1.metric("Name", patient.get("name", "N/A"))
     c2.metric("Age", patient.get("age", "N/A"))
     c3.metric("Gender", patient.get("gender", "N/A"))
+
 
 def show_tests(tests):
     st.subheader("Laboratory Results")
@@ -69,6 +99,7 @@ def show_tests(tests):
         })
     df = pd.DataFrame(rows)
     st.dataframe(df, hide_index=True)
+
 
 def build_prompt(ocr_text):
     return f"""You are an expert pathologist and medical laboratory AI assistant.
@@ -111,45 +142,43 @@ CRITICAL RULES:
 
 Return ONLY the JSON object."""
 
+
 def analyze_lab_report(ocr_text):
     prompt = build_prompt(ocr_text)
     if not initialize_groq():
         return {"patient": {}, "tests": [], "summary": "Groq initialization failed.", "recommendations": []}
     try:
+        # Use text model for OCR text analysis (not vision model)
         response = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
             temperature=0.1
         )
         result = response.choices[0].message.content.strip()
-        
-        # Clean up markdown formatting
+
         if "```json" in result:
             result = result.split("```json")[1]
         if "```" in result:
             result = result.split("```")[0]
-        
-        # Extract JSON object
+
         start = result.find("{")
         end = result.rfind("}") + 1
         if start == -1 or end <= start:
             raise ValueError("No JSON object found in Groq response.")
-        
+
         data = json.loads(result[start:end])
-        
-        # Ensure all required fields exist with defaults
+
         data.setdefault("patient", {})
         data.setdefault("tests", [])
         data.setdefault("summary", "")
         data.setdefault("recommendations", [])
-        
-        # Validate and normalize test statuses
+
         for test in data.get("tests", []):
             status = test.get("status", "Normal")
             if status not in ["Normal", "High", "Low"]:
                 test["status"] = "Normal"
-        
+
         return data
     except json.JSONDecodeError:
         st.error("Groq returned invalid JSON. Please try again.")
@@ -158,12 +187,50 @@ def analyze_lab_report(ocr_text):
         st.error(f"Analysis error: {e}")
         return {"patient": {}, "tests": [], "summary": "Analysis failed. Please ensure the image contains readable text.", "recommendations": []}
 
-def process_lab_report(image):
+
+def _process_via_api(image):
+    """Process lab report using the FastAPI backend with API key authentication."""
+    img_buffer = io.BytesIO()
+    image.save(img_buffer, format="PNG")
+    result = api_analyze_lab_report(img_buffer.getvalue(), "lab_report.png")
+    return {"ocr_text": result.get("report_text", ""), "analysis": result.get("analysis", {})}
+
+
+def _process_via_direct(image):
+    """Process lab report using direct Groq API call (fallback)."""
     ocr_text = extract_text(image)
     if not ocr_text:
         return {"ocr_text": "", "analysis": {"patient": {}, "tests": [], "summary": "No text detected.", "recommendations": []}}
-    analysis = analyze_lab_report(ocr_text)
-    return {"ocr_text": ocr_text, "analysis": analysis}
+    analysis_result = analyze_lab_report(ocr_text)
+    return {"ocr_text": ocr_text, "analysis": analysis_result}
+
+
+def process_lab_report(image):
+    """Process lab report.
+
+    Uses API backend with API key if configured, otherwise falls back to direct Groq calls.
+    """
+    use_api = (
+        HAS_API_CLIENT
+        and get_api_key()
+        and check_backend_health()
+    )
+
+    try:
+        if use_api:
+            return _process_via_api(image)
+        else:
+            return _process_via_direct(image)
+    except Exception as e:
+        st.error(f"Error processing lab report: {e}")
+        if use_api:
+            st.info("Falling back to direct mode...")
+            try:
+                return _process_via_direct(image)
+            except Exception as e2:
+                st.error(f"Direct mode also failed: {e2}")
+        return {"ocr_text": "", "analysis": {"patient": {}, "tests": [], "summary": str(e), "recommendations": []}}
+
 
 def count_status(tests):
     counts = {"High": 0, "Low": 0, "Normal": 0}
@@ -172,6 +239,7 @@ def count_status(tests):
         if status in counts:
             counts[status] += 1
     return counts
+
 
 def show_summary(summary, recommendations):
     st.subheader("Medical Summary")
@@ -185,6 +253,7 @@ def show_summary(summary, recommendations):
             st.write(f"* {item}")
     else:
         st.write("No recommendations available.")
+
 
 def lab_report_tab():
     st.header("AI Lab Report Analyzer")
@@ -220,5 +289,3 @@ def lab_report_tab():
     st.download_button(label="Download Analysis (JSON)", data=json.dumps(analysis, indent=4), file_name="lab_report_analysis.json", mime="application/json")
     with st.expander("View Raw JSON"):
         st.json(analysis)
-
-

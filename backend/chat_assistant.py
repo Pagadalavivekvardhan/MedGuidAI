@@ -1,15 +1,36 @@
 import streamlit as st
-from groq import Groq
-import speech_recognition as sr
-
 import os
 
-# Groq API Configuration
-api_key = os.getenv("GROQ_API_KEY", "")
-if not api_key:
-    raise RuntimeError("GROQ_API_KEY environment variable is not set.")
+# Try to import API client for backend mode
+try:
+    from frontend.api_client import send_chat_message as api_send_chat
+    from frontend.api_client import get_api_key, check_backend_health
+    HAS_API_CLIENT = True
+except ImportError:
+    HAS_API_CLIENT = False
 
-client = Groq(api_key=api_key)
+# Import direct Groq client as fallback
+client = None
+_Groq = None
+_sr = None
+try:
+    import speech_recognition as _sr
+except ImportError:
+    pass
+try:
+    from groq import Groq as _Groq
+except ImportError:
+    pass
+
+def _init_groq():
+    global client
+    if client is None and _Groq is not None:
+        api_key = os.getenv("GROQ_API_KEY", "")
+        if api_key:
+            try:
+                client = _Groq(api_key=api_key)
+            except Exception:
+                pass
 
 def chat_tab():
 
@@ -33,18 +54,21 @@ def chat_tab():
 
     # -------- VOICE INPUT --------
     if st.button("🎤 Speak"):
-        try:
-            recognizer = sr.Recognizer()
-            with sr.Microphone() as source:
-                st.info("Listening...")
-                audio = recognizer.listen(source)
+        if _sr is None:
+            st.error("Speech recognition not available. Please install SpeechRecognition package.")
+        else:
+            try:
+                recognizer = _sr.Recognizer()
+                with _sr.Microphone() as source:
+                    st.info("Listening...")
+                    audio = recognizer.listen(source)
 
-            user_input = recognizer.recognize_google(audio)
-            st.success(f"You said: {user_input}")
+                user_input = recognizer.recognize_google(audio)
+                st.success(f"You said: {user_input}")
 
-        except Exception as e:
-            st.error(f"Voice input failed: {str(e)}")
-            user_input = ""
+            except Exception as e:
+                st.error(f"Voice input failed: {str(e)}")
+                user_input = ""
     else:
         user_input = st.chat_input("Ask something about your report...")
 
@@ -86,14 +110,23 @@ Example style:
 Keep it short and human-like.
 """
 
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=1024
-                )
-                reply = response.choices[0].message.content
+                use_api = HAS_API_CLIENT and get_api_key() and check_backend_health()
+                if use_api:
+                    reply = api_send_chat(user_input, report, language)
+                else:
+                    _init_groq()
+                    if client is None:
+                        st.error("No Groq client available. Configure backend or GROQ_API_KEY.")
+                        reply = "Sorry, I cannot process your request right now."
+                    else:
+                        response = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=[
+                                {"role": "user", "content": prompt}
+                            ],
+                            max_tokens=1024
+                        )
+                        reply = response.choices[0].message.content
 
                 st.write(reply)
 
