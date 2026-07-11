@@ -2,6 +2,7 @@ import os
 import json
 import re
 import io
+from datetime import datetime
 
 import pandas as pd
 from PIL import Image
@@ -30,6 +31,9 @@ except ImportError:
 from backend.utils.ocr_engine import extract_text_safe
 from backend.utils.image_preprocessing import preprocess_image
 from backend.utils.text_correction import correct_ocr_text
+
+# Configurable reports directory
+REPORTS_DIR = os.getenv("REPORTS_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "saved_reports"))
 
 
 def initialize_groq():
@@ -255,37 +259,135 @@ def show_summary(summary, recommendations):
         st.write("No recommendations available.")
 
 
+# ─── Disk Persistence ───────────────────────────────────────────────────────
+
+
 def _save_report_to_disk(analysis, ocr_text, filename_prefix="lab_report"):
     """Save lab report analysis to disk for persistence.
-    
+
     Returns the saved file path, or None if saving failed.
     """
     try:
-        from datetime import datetime
-        reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "saved_reports")
-        os.makedirs(reports_dir, exist_ok=True)
-        
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{filename_prefix}_{timestamp}.json"
-        filepath = os.path.join(reports_dir, filename)
-        
+        filepath = os.path.join(REPORTS_DIR, filename)
+
         save_data = {
             "timestamp": datetime.now().isoformat(),
             "ocr_text": ocr_text,
             "analysis": analysis,
         }
-        
+
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(save_data, f, indent=4, ensure_ascii=False)
-        
+
         return filepath
     except Exception as e:
         st.warning(f"Could not save report to disk: {e}")
         return None
 
 
+def _load_saved_reports():
+    """Load all saved reports from disk, sorted by timestamp (newest first).
+
+    Returns a list of dicts with filename, timestamp, and summary info.
+    """
+    reports = []
+    if not os.path.exists(REPORTS_DIR):
+        return reports
+
+    for filename in sorted(os.listdir(REPORTS_DIR), reverse=True):
+        if not filename.endswith(".json"):
+            continue
+        filepath = os.path.join(REPORTS_DIR, filename)
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            reports.append({
+                "filename": filename,
+                "filepath": filepath,
+                "timestamp": data.get("timestamp", "Unknown"),
+                "patient": data.get("analysis", {}).get("patient", {}),
+                "tests_count": len(data.get("analysis", {}).get("tests", [])),
+                "summary": data.get("analysis", {}).get("summary", "No summary"),
+            })
+        except Exception:
+            continue
+    return reports
+
+
+def _display_saved_reports():
+    """Display the Previous Reports section."""
+    reports = _load_saved_reports()
+    if not reports:
+        st.info("No previous reports saved yet.")
+        return
+
+    st.write(f"**{len(reports)} saved report(s)**")
+    for i, report in enumerate(reports[:10]):  # Show latest 10
+        patient_name = report["patient"].get("name", "Unknown")
+        ts = report["timestamp"][:19].replace("T", " ") if report["timestamp"] != "Unknown" else "Unknown"
+
+        with st.expander(f"{patient_name} - {ts}"):
+            st.caption(f"File: {report['filename']}")
+            st.caption(f"Tests: {report['tests_count']}")
+            st.write(report["summary"][:200] + "..." if len(report["summary"]) > 200 else report["summary"])
+
+            if st.button("Load Report", key=f"load_saved_{i}"):
+                try:
+                    with open(report["filepath"], "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    st.session_state["report_text"] = data.get("ocr_text", "")
+                    st.session_state["lab_analysis"] = data.get("analysis", {})
+                    st.session_state["_lab_loaded_from_disk"] = True
+                    st.success("Report loaded!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to load report: {e}")
+
+
+# ─── Main Tab ───────────────────────────────────────────────────────────────
+
+
 def lab_report_tab():
     st.header("AI Lab Report Analyzer")
+
+    # Check if a saved report was loaded
+    if st.session_state.get("_lab_loaded_from_disk"):
+        analysis = st.session_state["lab_analysis"]
+        ocr_text = st.session_state.get("report_text", "")
+
+        if st.button("New Analysis", type="secondary"):
+            st.session_state.pop("lab_analysis", None)
+            st.session_state.pop("report_text", None)
+            st.session_state.pop("_lab_loaded_from_disk", None)
+            st.rerun()
+
+        st.success("Report loaded from saved reports")
+        with st.expander("View OCR Text"):
+            st.text_area("Extracted Text", value=ocr_text, height=250, disabled=True)
+        show_patient(analysis.get("patient", {}))
+        tests = analysis.get("tests", [])
+        show_tests(tests)
+        if tests:
+            counts = count_status(tests)
+            st.subheader("Result Overview")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Normal", counts["Normal"])
+            c2.metric("Low", counts["Low"])
+            c3.metric("High", counts["High"])
+        show_summary(analysis.get("summary", ""), analysis.get("recommendations", []))
+        st.download_button(label="Download Analysis (JSON)", data=json.dumps(analysis, indent=4), file_name="lab_report_analysis.json", mime="application/json")
+        with st.expander("View Raw JSON"):
+            st.json(analysis)
+        return
+
+    # Show Previous Reports section
+    with st.expander("Previous Reports", expanded=False):
+        _display_saved_reports()
+
     st.write("Upload a laboratory report image for AI-powered analysis.")
     uploaded_file = st.file_uploader("Upload Lab Report", type=["png", "jpg", "jpeg"])
     if uploaded_file is None:
@@ -301,16 +403,15 @@ def lab_report_tab():
     analysis = result["analysis"]
     ocr_text = result["ocr_text"]
     st.success("Analysis Completed Successfully")
-    
+
     # Save report to disk automatically
     saved_path = _save_report_to_disk(analysis, ocr_text)
     if saved_path:
         st.info(f"Report saved to: {os.path.basename(saved_path)}")
-    
+
     with st.expander("View OCR Text"):
         st.text_area("Extracted Text", value=ocr_text, height=250)
-    patient = analysis.get("patient", {})
-    show_patient(patient)
+    show_patient(analysis.get("patient", {}))
     tests = analysis.get("tests", [])
     show_tests(tests)
     if tests:
