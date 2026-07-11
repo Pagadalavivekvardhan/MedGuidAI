@@ -155,8 +155,7 @@ class TestUploadPrescription:
                 upload_prescription(b"", "test.png")
 
             # Verify the call was made with the empty bytes
-            call_kwargs = mock_requests.post.call_args
-            files = call_kwargs.kwargs.get("files") or call_kwargs[1].get("files")
+            files = mock_requests.post.call_args.kwargs["files"]
             assert files["file"][1] == b""
 
     def test_upload_success(self):
@@ -378,8 +377,7 @@ class TestDietPersonalizedPlan:
                 "Hb: 12.5", "Non-Vegetarian", "Weight Loss", 4, "nuts"
             )
 
-            call_kwargs = mock_requests.post.call_args
-            payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+            payload = mock_requests.post.call_args.kwargs["json"]
             assert payload["mode"] == "Personalized Meal Plan"
             assert payload["diet_type"] == "Non-Vegetarian"
             assert payload["goal"] == "Weight Loss"
@@ -399,8 +397,7 @@ class TestDietPersonalizedPlan:
             from frontend.api_client import get_diet_personalized_plan
             get_diet_personalized_plan("report", "Vegetarian", "General Health", 3, None)
 
-            call_kwargs = mock_requests.post.call_args
-            payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+            payload = mock_requests.post.call_args.kwargs["json"]
             assert payload["allergies"] == ""
 
 
@@ -424,8 +421,7 @@ class TestContentTypeRemoval:
             upload_prescription(b"fake", "test.png")
 
             # Check that headers passed to requests.post do NOT have Content-Type
-            call_kwargs = mock_requests.post.call_args
-            headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers")
+            headers = mock_requests.post.call_args.kwargs["headers"]
             assert "Content-Type" not in headers
             assert "X-API-KEY" in headers
 
